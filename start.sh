@@ -17,6 +17,8 @@ echo "📚 Instalando dependências..."
 pip install -q -r requirements.txt
 
 # Inicializar banco de dados
+touch pet_adoption.db
+chmod 666 pet_adoption.db
 echo "🗄️ Inicializando banco de dados..."
 python database.py
 
