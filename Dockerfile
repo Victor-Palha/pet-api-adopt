@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN touch pet_adoption.db
+RUN chmod 666 pet_adoption.db 
 RUN python database.py
 
 EXPOSE 8000
