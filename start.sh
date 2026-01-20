@@ -12,9 +12,9 @@ fi
 echo "🔧 Ativando ambiente virtual..."
 source venv/bin/activate
 
-# Instalar dependências se necessário
-echo "📚 Verificando dependências..."
-pip install -q fastapi "uvicorn[standard]" sqlalchemy "pydantic[email]" python-multipart python-dotenv
+# Instalar dependências do requirements.txt
+echo "📚 Instalando dependências..."
+pip install -q -r requirements.txt
 
 # Inicializar banco de dados
 echo "🗄️ Inicializando banco de dados..."

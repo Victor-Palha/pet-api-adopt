@@ -1,9 +1,40 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import os
+from pathlib import Path
 
 from app_types.constants import DATABASE_URL
-from auth import get_password_hash
+
+# Criar o diretório para o banco de dados se não existir
+def ensure_database_exists():
+    """Garante que o diretório do banco de dados existe"""
+    if DATABASE_URL.startswith('sqlite:///'):
+        # Extrair o caminho do arquivo do DATABASE_URL
+        db_path = DATABASE_URL.replace('sqlite:///', '')
+        
+        # Remover ./ do início se existir
+        if db_path.startswith('./'):
+            db_path = db_path[2:]
+        
+        # Converter para caminho absoluto
+        db_path = os.path.abspath(db_path)
+        
+        # Criar o diretório pai se não existir
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            Path(db_dir).mkdir(parents=True, exist_ok=True)
+            print(f"📁 Diretório verificado: {db_dir}")
+        
+        print(f"📍 Banco de dados será criado em: {db_path}")
+        
+        # Verificar se já existe
+        if os.path.exists(db_path):
+            print(f"ℹ️  Banco de dados já existe")
+        else:
+            print(f"🆕 Novo banco de dados será criado")
+
+# Garantir que o banco existe antes de criar o engine
+ensure_database_exists()
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -16,21 +47,36 @@ def get_db():
         db.close()
 
 def init_db():
+    # Importar get_password_hash DENTRO da função para evitar importação circular
+    from auth import get_password_hash
     from models import Base, Pet, User
     from app_types import GenderEnum, SpeciesEnum, StatusEnum
     
-    Base.metadata.create_all(bind=engine)
+    print("🗄️  Criando tabelas no banco de dados...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Tabelas criadas com sucesso!")
+    except Exception as e:
+        print(f"❌ Erro ao criar tabelas: {e}")
+        raise
     
     db = SessionLocal()
     try:
-        # Verificar se já existem dados (pets ou usuários)
-        if db.query(Pet).count() > 0 and db.query(User).count() > 0:
+        # Verificar se já existem dados
+        existing_pets = db.query(Pet).count()
+        existing_users = db.query(User).count()
+        
+        if existing_pets > 0 or existing_users > 0:
+            print(f"ℹ️  Banco já possui dados: {existing_users} usuários, {existing_pets} pets")
             return
         
+        print("📝 Criando dados iniciais...")
+        
+        # Criar usuários
         user1 = User(
             full_name="João Silva",
             email="joao@email.com",
-                   whatsapp="11999999999",
+            whatsapp="11999999999",
             city="São Paulo",
             password=get_password_hash("senha123")
         )
@@ -38,26 +84,24 @@ def init_db():
         user2 = User(
             full_name="Maria Santos",
             email="maria@email.com",
-                   whatsapp="21999999999",
+            whatsapp="21999999999",
             city="Rio de Janeiro",
             password=get_password_hash("senha123")
         )
         
-        # Usuário admin
         admin_user = User(
             full_name="Admin",
             email="yladacz@gmail.com",
-                   whatsapp="11999999999",
+            whatsapp="11999999999",
             city="São Paulo",
             password=get_password_hash("@Senha123")
         )
         
-        db.add(user1)
-        db.add(user2)
-        db.add(admin_user)
+        db.add_all([user1, user2, admin_user])
         db.commit()
+        print("✅ 3 usuários criados!")
         
-        # Dados atualizados com gêneros corretos
+        # Dados de pets
         dogs_data = [
             {"name": "Luna", "gender": GenderEnum.FEMALE, "photo": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&h=300&fit=crop"},
             {"name": "Max", "gender": GenderEnum.MALE, "photo": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&h=300&fit=crop"},
@@ -96,13 +140,13 @@ def init_db():
         
         cities = ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Salvador", "Brasília", "Fortaleza", "Manaus", "Curitiba", "Recife", "Porto Alegre"]
         
-        # Criar cachorros
+        print("🐕 Criando cachorros...")
         for i, dog in enumerate(dogs_data):
             pet = Pet(
                 name=dog["name"],
                 species=SpeciesEnum.DOG,
                 breed="Vira-lata",
-                age=12 + (i * 6),  # 1-4 anos em meses
+                age=12 + (i * 6),
                 gender=dog["gender"],
                 city=cities[i % len(cities)],
                 description=f"{dog['name']} é um{'a' if dog['gender'] == GenderEnum.FEMALE else ''} cachorro{'a' if dog['gender'] == GenderEnum.FEMALE else ''} muito carinhoso{'a' if dog['gender'] == GenderEnum.FEMALE else ''} e brincalhão{'a' if dog['gender'] == GenderEnum.FEMALE else ''}.",
@@ -111,13 +155,13 @@ def init_db():
             )
             db.add(pet)
         
-        # Criar gatos
+        print("🐱 Criando gatos...")
         for i, cat in enumerate(cats_data):
             pet = Pet(
                 name=cat["name"],
                 species=SpeciesEnum.CAT,
                 breed="Sem raça definida",
-                age=8 + (i * 4),  # 8 meses - 2 anos
+                age=8 + (i * 4),
                 gender=cat["gender"],
                 city=cities[i % len(cities)],
                 description=f"{cat['name']} é um{'a' if cat['gender'] == GenderEnum.FEMALE else ''} gato{'a' if cat['gender'] == GenderEnum.FEMALE else ''} muito dócil e independente.",
@@ -127,11 +171,16 @@ def init_db():
             db.add(pet)
         
         db.commit()
-        print("✅ Dados criados com sucesso!")
+        print(f"✅ {len(dogs_data)} cachorros criados!")
+        print(f"✅ {len(cats_data)} gatos criados!")
+        print(f"📊 Total: {len(dogs_data) + len(cats_data)} pets no banco de dados")
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"❌ Erro ao criar dados iniciais: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
+        raise
     finally:
         db.close()
 
